@@ -1,0 +1,67 @@
+{
+  manifest_version: "0.3.0",
+
+  config_schema: {
+    type: "object",
+    properties: {
+      matrix_username: { type: "string" },
+      matrix_password: { type: "string", secret: true },
+      model: { type: "string", default: "gpt-5.4-mini" },
+      model_reasoning_effort: { type: "string", default: "medium" },
+      developer_instructions: { type: "string" },
+      config_toml: { type: "string" },
+      agents_md: { type: "string" },
+      workspace_agents_md: { type: "string" },
+    },
+    required: ["matrix_username", "matrix_password", "model"],
+    additionalProperties: false,
+  },
+
+  slots: {
+    matrix: { kind: "http" },
+    provisioning_mcp: { kind: "mcp" },
+    responses_api: { kind: "http" },
+  },
+
+  components: {
+    codex_agent: {
+      manifest: "https://raw.githubusercontent.com/ricelines/codex-a2a/refs/heads/main/amber/codex-a2a-runtime.json5",
+      config: {
+        model: "${config.model}",
+        model_reasoning_effort: "${config.model_reasoning_effort}",
+        developer_instructions: "${config.developer_instructions}",
+        config_toml: "${config.config_toml}",
+        agents_md: "${config.agents_md}",
+        workspace_agents_md: "${config.workspace_agents_md}",
+      },
+    },
+    matrix_tools: {
+      manifest: "https://raw.githubusercontent.com/ricelines/matrix-mcp/refs/heads/main/amber.json5",
+      config: {
+        username: "${config.matrix_username}",
+        password: "${config.matrix_password}",
+        scopes: "default,rooms.create,rooms.join,messages.send,messages.reply",
+      },
+    },
+    matrix_ingress: {
+      manifest: "https://raw.githubusercontent.com/ricelines/matrix-a2a-bridge/refs/heads/main/amber/matrix-a2a-bridge.json5",
+      config: {
+        matrix_username: "${config.matrix_username}",
+        matrix_password: "${config.matrix_password}",
+      },
+    },
+  },
+
+  bindings: [
+    { to: "#matrix_ingress.matrix", from: "slots.matrix", weak: true },
+    { to: "#matrix_ingress.upstream_a2a", from: "#codex_agent.a2a" },
+    { to: "#matrix_tools.matrix", from: "slots.matrix", weak: true },
+    { to: "#codex_agent.responses_api", from: "slots.responses_api", weak: true },
+    { to: "#codex_agent.tool", from: "#matrix_tools.mcp" },
+    { to: "#codex_agent.tool", from: "slots.provisioning_mcp", weak: true },
+  ],
+
+  exports: {
+    a2a: "#codex_agent.a2a",
+  },
+}

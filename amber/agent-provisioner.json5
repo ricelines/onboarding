@@ -1,0 +1,100 @@
+{
+  manifest_version: "0.3.0",
+
+  config_schema: {
+    type: "object",
+    properties: {
+      listen_addr: { type: "string", default: ":8080" },
+      registration_token: { type: "string", secret: true },
+      matrix_bindable_service_name: { type: "string", default: "matrix" },
+      default_agent_source_url: { type: "string" },
+      shared_responses_bindable_service_id: { type: "string" },
+      default_agent_model: { type: "string", default: "gpt-5.4-mini" },
+      default_agent_model_reasoning_effort: { type: "string", default: "medium" },
+      default_agent_developer_instructions: { type: "string" },
+      default_agent_config_toml: { type: "string" },
+      default_agent_agents_md: { type: "string" },
+      default_agent_workspace_agents_md: { type: "string" },
+      revoked_source_urls: {
+        type: "string",
+        description: "Comma- or newline-delimited manager allowlist source URLs to revoke after bootstrap. Do not include default_agent_source_url.",
+      },
+    },
+    required: [
+      "default_agent_source_url",
+      "shared_responses_bindable_service_id",
+      "default_agent_model",
+    ],
+    additionalProperties: false,
+  },
+
+  resources: {
+    state: {
+      kind: "storage",
+      params: {
+        size: "64Mi",
+      },
+    },
+  },
+
+  slots: {
+    matrix: { kind: "http" },
+    amber_manager_api: { kind: "http" },
+  },
+
+  program: {
+    image: "ghcr.io/ricelines/onboarding:v0.1",
+    entrypoint: ["/app/onboarding-provisioner"],
+    env: {
+      ONBOARDING_LISTEN_ADDR: "${config.listen_addr}",
+      ONBOARDING_DB_PATH: "/app/data/provisioner.db",
+      ONBOARDING_MATRIX_HOMESERVER_URL: "${slots.matrix.url}",
+      ONBOARDING_MANAGER_URL: "${slots.amber_manager_api.url}",
+      ONBOARDING_DEFAULT_AGENT_SOURCE_URL: "${config.default_agent_source_url}",
+      ONBOARDING_SHARED_RESPONSES_BINDABLE_SERVICE_ID: "${config.shared_responses_bindable_service_id}",
+      ONBOARDING_DEFAULT_AGENT_MODEL: "${config.default_agent_model}",
+      ONBOARDING_MATRIX_BINDABLE_SERVICE_NAME: "${config.matrix_bindable_service_name}",
+      ONBOARDING_REGISTRATION_TOKEN: {
+        when: "config.registration_token",
+        value: "${config.registration_token}",
+      },
+      ONBOARDING_DEFAULT_AGENT_MODEL_REASONING_EFFORT: "${config.default_agent_model_reasoning_effort}",
+      ONBOARDING_DEFAULT_AGENT_DEVELOPER_INSTRUCTIONS: {
+        when: "config.default_agent_developer_instructions",
+        value: "${config.default_agent_developer_instructions}",
+      },
+      ONBOARDING_DEFAULT_AGENT_CONFIG_TOML: {
+        when: "config.default_agent_config_toml",
+        value: "${config.default_agent_config_toml}",
+      },
+      ONBOARDING_DEFAULT_AGENT_AGENTS_MD: {
+        when: "config.default_agent_agents_md",
+        value: "${config.default_agent_agents_md}",
+      },
+      ONBOARDING_DEFAULT_AGENT_WORKSPACE_AGENTS_MD: {
+        when: "config.default_agent_workspace_agents_md",
+        value: "${config.default_agent_workspace_agents_md}",
+      },
+      ONBOARDING_REVOKED_SOURCE_URLS: {
+        when: "config.revoked_source_urls",
+        value: "${config.revoked_source_urls}",
+      },
+    },
+    mounts: [
+      { path: "/app/data", from: "resources.state" },
+    ],
+    network: {
+      endpoints: [
+        { name: "mcp", port: 8080, protocol: "http" },
+      ],
+    },
+  },
+
+  provides: {
+    mcp: { kind: "mcp", endpoint: "mcp" },
+  },
+
+  exports: {
+    mcp: "provides.mcp",
+  },
+}
