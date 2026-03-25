@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -22,7 +21,6 @@ type Config struct {
 	ForwarderNamePrefix  string
 	PollInterval         time.Duration
 	Logger               Logger
-	AddHostGateway       bool
 }
 
 type Monitor struct {
@@ -60,9 +58,6 @@ func Start(parent context.Context, cfg Config) (*Monitor, error) {
 	}
 	if cfg.PollInterval <= 0 {
 		cfg.PollInterval = 200 * time.Millisecond
-	}
-	if !cfg.AddHostGateway && runtime.GOOS == "linux" {
-		cfg.AddHostGateway = true
 	}
 
 	ctx, cancel := context.WithCancel(parent)
@@ -266,26 +261,24 @@ func amberRouterPublishedPorts() ([]int, error) {
 }
 
 func startForwarderContainer(cfg Config, containerName string, port int) error {
-	args := []string{
-		"run", "--rm", "-d",
-		"--name", containerName,
-		"--network", "container:" + cfg.ManagerContainerName,
-	}
-	if cfg.AddHostGateway {
-		args = append(args, "--add-host", "host.docker.internal:host-gateway")
-	}
-	args = append(
-		args,
-		"--entrypoint", "/app/onboarding-tcp-forwarder",
-		cfg.ForwarderImage,
-		"--listen", fmt.Sprintf("127.0.0.1:%d", port),
-		"--target", fmt.Sprintf("host.docker.internal:%d", port),
-	)
+	args := forwarderDockerArgs(cfg, containerName, port)
 	output, err := runDockerCommand(30*time.Second, args...)
 	if err != nil {
 		return fmt.Errorf("start forwarder container %s for port %d: %w: %s", containerName, port, err, strings.TrimSpace(output))
 	}
 	return nil
+}
+
+func forwarderDockerArgs(cfg Config, containerName string, port int) []string {
+	return []string{
+		"run", "--rm", "-d",
+		"--name", containerName,
+		"--network", "container:" + cfg.ManagerContainerName,
+		"--entrypoint", "/app/onboarding-tcp-forwarder",
+		cfg.ForwarderImage,
+		"--listen", fmt.Sprintf("127.0.0.1:%d", port),
+		"--target", fmt.Sprintf("host.docker.internal:%d", port),
+	}
 }
 
 func dockerContainerRunning(containerName string) (bool, error) {

@@ -27,16 +27,16 @@ import (
 )
 
 const (
-	liveEnvVar               = "ONBOARDING_RUN_LIVE"
-	liveRealEnvVar           = "ONBOARDING_RUN_LIVE_REAL"
-	profileEnvVar            = "ONBOARDING_E2E_PROFILE"
-	authProxySourceEnvVar    = "ONBOARDING_E2E_AUTH_PROXY_SOURCE_URL"
-	codexAuthPathEnvVar      = "ONBOARDING_E2E_CODEX_AUTH_JSON_PATH"
-	onboardingModelEnvVar    = "ONBOARDING_E2E_ONBOARDING_MODEL"
-	onboardingReasoningEnvVar = "ONBOARDING_E2E_ONBOARDING_REASONING_EFFORT"
-	defaultAgentModelEnvVar  = "ONBOARDING_E2E_DEFAULT_AGENT_MODEL"
+	liveEnvVar                  = "ONBOARDING_RUN_LIVE"
+	liveRealEnvVar              = "ONBOARDING_RUN_LIVE_REAL"
+	profileEnvVar               = "ONBOARDING_E2E_PROFILE"
+	authProxySourceEnvVar       = "ONBOARDING_E2E_AUTH_PROXY_SOURCE_URL"
+	codexAuthPathEnvVar         = "ONBOARDING_E2E_CODEX_AUTH_JSON_PATH"
+	onboardingModelEnvVar       = "ONBOARDING_E2E_ONBOARDING_MODEL"
+	onboardingReasoningEnvVar   = "ONBOARDING_E2E_ONBOARDING_REASONING_EFFORT"
+	defaultAgentModelEnvVar     = "ONBOARDING_E2E_DEFAULT_AGENT_MODEL"
 	defaultAgentReasoningEnvVar = "ONBOARDING_E2E_DEFAULT_AGENT_REASONING_EFFORT"
-	managerImageEnvVar       = "ONBOARDING_E2E_AMBER_MANAGER_IMAGE"
+	managerImageEnvVar          = "ONBOARDING_E2E_AMBER_MANAGER_IMAGE"
 
 	serverName                  = "tuwunel.test"
 	tuwunelImage                = "ghcr.io/matrix-construct/tuwunel:v1.5.1"
@@ -385,7 +385,6 @@ func startLiveStackWithOptions(t *testing.T, opts liveStackOptions) *liveStack {
 		ForwarderNamePrefix:  fmt.Sprintf("onboarding-manager-forwarder-%d", time.Now().UnixNano()),
 		PollInterval:         200 * time.Millisecond,
 		Logger:               t.Logf,
-		AddHostGateway:       runtime.GOOS == "linux",
 	})
 	if err != nil {
 		t.Fatalf("start manager forwarders: %v", err)

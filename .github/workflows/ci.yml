@@ -1,0 +1,59 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  AMBER_CLI_IMAGE: ghcr.io/rdi-foundation/amber-cli:main@sha256:aa8dd60c8ee05952a12a979a1193b40553bfe2264eb7714f3e73f04c6cb227f2
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          unformatted="$(find . -name '*.go' -type f -print0 | xargs -0 gofmt -l)"
+          if [[ -n "${unformatted}" ]]; then
+            printf 'gofmt reported unformatted files:\n%s\n' "${unformatted}" >&2
+            exit 1
+          fi
+
+      - name: Check shell script syntax
+        run: bash -n scripts/run-local-real.sh
+
+      - name: Validate Amber manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          for manifest in amber/agent-provisioner.json5 amber/onboarding-agent.json5; do
+            docker run --rm -v "$PWD":/work -w /work "${AMBER_CLI_IMAGE}" check "$manifest"
+          done
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -mod=mod ./...

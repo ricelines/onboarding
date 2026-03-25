@@ -266,16 +266,16 @@ type bridgeStateSnapshot struct {
 }
 
 type taskArtifactTrace struct {
-	ArtifactID     string
-	ItemType       string
-	ItemID         string
-	ItemStartedAt  time.Time
-	ItemStartedOK  bool
-	EmittedAt      time.Time
-	EmittedAtOK    bool
-	TaskStartedAt  time.Time
-	TaskStartedOK  bool
-	Description    string
+	ArtifactID    string
+	ItemType      string
+	ItemID        string
+	ItemStartedAt time.Time
+	ItemStartedOK bool
+	EmittedAt     time.Time
+	EmittedAtOK   bool
+	TaskStartedAt time.Time
+	TaskStartedOK bool
+	Description   string
 }
 
 func logScenarioRoomTaskTrace(t *testing.T, stack *liveStack, scenarioID string, roomID id.RoomID, label string) {

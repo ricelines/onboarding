@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"runtime"
 	"syscall"
 	"time"
 
@@ -20,14 +19,12 @@ func main() {
 		forwarderImage   string
 		namePrefix       string
 		pollInterval     time.Duration
-		addHostGateway   bool
 	)
 
 	flag.StringVar(&managerContainer, "manager-container", "", "amber-manager container name")
 	flag.StringVar(&forwarderImage, "forwarder-image", "ghcr.io/ricelines/onboarding:v0.1", "image that contains /app/onboarding-tcp-forwarder")
 	flag.StringVar(&namePrefix, "name-prefix", "onboarding-manager-forwarder", "docker container name prefix for forwarders")
 	flag.DurationVar(&pollInterval, "poll-interval", 200*time.Millisecond, "poll interval")
-	flag.BoolVar(&addHostGateway, "add-host-gateway", runtime.GOOS == "linux", "add host.docker.internal:host-gateway to forwarder containers")
 	flag.Parse()
 
 	if managerContainer == "" {
@@ -43,7 +40,6 @@ func main() {
 		ForwarderImage:       forwarderImage,
 		ForwarderNamePrefix:  namePrefix,
 		PollInterval:         pollInterval,
-		AddHostGateway:       addHostGateway,
 		Logger: func(format string, args ...any) {
 			log.Printf(format, args...)
 		},
