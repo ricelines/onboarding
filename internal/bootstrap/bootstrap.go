@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"reflect"
 	"strings"
@@ -87,8 +86,8 @@ func (r *Runner) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("login onboarding bot: %w", err)
 	}
-	if err := waitForJoinedMember(ctx, adminClient, welcomeRoomID, id.UserID(onboardingUserID), waitTimeout); err != nil {
-		return fmt.Errorf("wait for onboarding bot auto-join: %w", err)
+	if err := ensureJoinedRoom(ctx, adminClient, onboardingClient, welcomeRoomID, id.UserID(onboardingUserID), waitTimeout); err != nil {
+		return fmt.Errorf("ensure onboarding bot joined welcome room: %w", err)
 	}
 	if err := r.ensureWelcomeMessage(ctx, onboardingClient, welcomeRoomID, id.UserID(onboardingUserID)); err != nil {
 		return fmt.Errorf("ensure welcome message: %w", err)
@@ -470,6 +469,9 @@ func (r *Runner) waitForScenarioRunning(ctx context.Context, scenarioID string) 
 		case "running":
 			return nil
 		case "failed":
+			if transientScenarioFailure(detail.LastError) {
+				break
+			}
 			if strings.TrimSpace(detail.LastError) != "" {
 				return fmt.Errorf("scenario %s failed: %s", scenarioID, detail.LastError)
 			}
@@ -481,6 +483,17 @@ func (r *Runner) waitForScenarioRunning(ctx context.Context, scenarioID string) 
 		case <-time.After(waitPollInterval):
 		}
 	}
+}
+
+func transientScenarioFailure(lastError string) bool {
+	lastError = strings.TrimSpace(lastError)
+	if lastError == "" {
+		return true
+	}
+
+	return strings.Contains(lastError, "docker compose reports no services") ||
+		strings.Contains(lastError, " is created") ||
+		strings.Contains(lastError, " is exited")
 }
 
 func (r *Runner) ensureUser(ctx context.Context, username, password string) (string, error) {
@@ -513,17 +526,14 @@ func (r *Runner) ensureWelcomeRoom(ctx context.Context, adminClient *mautrix.Cli
 	if !found {
 		created, err := adminClient.CreateRoom(ctx, &mautrix.ReqCreateRoom{
 			Name:          "Welcome",
-			Visibility:    "public",
-			Preset:        "public_chat",
+			Visibility:    "private",
+			Preset:        "private_chat",
 			RoomAliasName: r.cfg.WelcomeRoomAliasLocalpart,
 		})
 		if err != nil {
 			return "", fmt.Errorf("create welcome room: %w", err)
 		}
 		roomID = created.RoomID
-	}
-	if err := setRoomDirectoryVisibility(ctx, adminClient, roomID, "private"); err != nil {
-		return "", err
 	}
 	return roomID, nil
 }
@@ -610,15 +620,6 @@ func resolveAlias(ctx context.Context, client *mautrix.Client, alias id.RoomAlia
 	return "", false, fmt.Errorf("resolve alias %s: %w", alias, err)
 }
 
-func setRoomDirectoryVisibility(ctx context.Context, client *mautrix.Client, roomID id.RoomID, visibility string) error {
-	urlPath := client.BuildClientURL("v3", "directory", "list", "room", roomID)
-	_, err := client.MakeRequest(ctx, http.MethodPut, urlPath, map[string]any{"visibility": visibility}, &struct{}{})
-	if err != nil {
-		return fmt.Errorf("set room directory visibility for %s: %w", roomID, err)
-	}
-	return nil
-}
-
 func roomHasExactMessage(ctx context.Context, client *mautrix.Client, roomID id.RoomID, sender id.UserID, body string) (bool, error) {
 	resp, err := client.SyncRequest(ctx, 0, "", "", true, "")
 	if err != nil {
@@ -650,15 +651,68 @@ func eventMessageBody(evt *event.Event) string {
 	return body
 }
 
+func ensureJoinedRoom(ctx context.Context, adminClient, memberClient *mautrix.Client, roomID id.RoomID, userID id.UserID, timeout time.Duration) error {
+	joined, err := roomHasJoinedMember(ctx, adminClient, roomID, userID)
+	if err != nil {
+		return err
+	}
+	if joined {
+		return nil
+	}
+
+	if _, err := adminClient.InviteUser(ctx, roomID, &mautrix.ReqInviteUser{UserID: userID}); err != nil {
+		joined, joinedErr := roomHasJoinedMember(ctx, adminClient, roomID, userID)
+		if joinedErr != nil {
+			return joinedErr
+		}
+		if !joined {
+			return fmt.Errorf("invite %s to %s: %w", userID, roomID, err)
+		}
+		return nil
+	}
+
+	waitCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	for {
+		if _, err := memberClient.JoinRoom(waitCtx, roomID.String(), &mautrix.ReqJoinRoom{}); err == nil {
+			return waitForJoinedMember(waitCtx, adminClient, roomID, userID, timeout)
+		}
+
+		joined, err := roomHasJoinedMember(waitCtx, adminClient, roomID, userID)
+		if err != nil {
+			return err
+		}
+		if joined {
+			return nil
+		}
+
+		select {
+		case <-waitCtx.Done():
+			return fmt.Errorf("timed out joining %s to %s", userID, roomID)
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+}
+
+func roomHasJoinedMember(ctx context.Context, client *mautrix.Client, roomID id.RoomID, userID id.UserID) (bool, error) {
+	members, err := client.JoinedMembers(ctx, roomID)
+	if err != nil {
+		return false, nil
+	}
+	_, ok := members.Joined[userID]
+	return ok, nil
+}
+
 func waitForJoinedMember(ctx context.Context, client *mautrix.Client, roomID id.RoomID, userID id.UserID, timeout time.Duration) error {
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	for {
-		members, err := client.JoinedMembers(waitCtx, roomID)
-		if err == nil {
-			if _, ok := members.Joined[userID]; ok {
-				return nil
-			}
+		joined, err := roomHasJoinedMember(waitCtx, client, roomID, userID)
+		if err != nil {
+			return err
+		}
+		if joined {
+			return nil
 		}
 		select {
 		case <-waitCtx.Done():
