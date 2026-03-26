@@ -30,7 +30,7 @@ func main() {
 
 	requestBody, err := json.Marshal(map[string]any{
 		"jsonrpc": "2.0",
-		"id":      "onboarding-a2a-get-task",
+		"id":      "onboarding-test-a2a-get-task",
 		"method":  "tasks/get",
 		"params": map[string]any{
 			"id": taskID,

@@ -346,7 +346,7 @@ func fetchScenarioTask(t *testing.T, managerContainerName, endpoint string, task
 		"run",
 		"--rm",
 		"--network", "container:"+managerContainerName,
-		"--entrypoint", "/app/onboarding-a2a-get-task",
+		"--entrypoint", "/app/onboarding-test-a2a-get-task",
 		"ghcr.io/ricelines/onboarding:v0.1",
 		"--base-url", endpoint,
 		"--task-id", taskID,

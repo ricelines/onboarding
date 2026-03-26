@@ -22,7 +22,7 @@ func main() {
 	)
 
 	flag.StringVar(&managerContainer, "manager-container", "", "amber-manager container name")
-	flag.StringVar(&forwarderImage, "forwarder-image", "ghcr.io/ricelines/onboarding:v0.1", "image that contains /app/onboarding-tcp-forwarder")
+	flag.StringVar(&forwarderImage, "forwarder-image", "ghcr.io/ricelines/onboarding:v0.1", "image that contains /app/onboarding-test-tcp-forwarder")
 	flag.StringVar(&namePrefix, "name-prefix", "onboarding-manager-forwarder", "docker container name prefix for forwarders")
 	flag.DurationVar(&pollInterval, "poll-interval", 200*time.Millisecond, "poll interval")
 	flag.Parse()

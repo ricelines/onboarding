@@ -334,7 +334,7 @@ start_manager_forwarders() {
   rm -f "$FORWARDERS_LOG_PATH"
   nohup bash -lc "
     cd \"$ONBOARDING_ROOT\"
-    exec go run ./cmd/onboarding-manager-forwarders \
+    exec go run ./cmd/onboarding-test-manager-forwarders \
       --manager-container \"$MANAGER_CONTAINER\" \
       --forwarder-image \"ghcr.io/ricelines/onboarding:v0.1\" \
       --name-prefix \"$FORWARDER_CONTAINER_PREFIX\"

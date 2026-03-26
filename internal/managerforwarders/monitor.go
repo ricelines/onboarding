@@ -274,7 +274,7 @@ func forwarderDockerArgs(cfg Config, containerName string, port int) []string {
 		"run", "--rm", "-d",
 		"--name", containerName,
 		"--network", "container:" + cfg.ManagerContainerName,
-		"--entrypoint", "/app/onboarding-tcp-forwarder",
+		"--entrypoint", "/app/onboarding-test-tcp-forwarder",
 		cfg.ForwarderImage,
 		"--listen", fmt.Sprintf("127.0.0.1:%d", port),
 		"--target", fmt.Sprintf("host.docker.internal:%d", port),

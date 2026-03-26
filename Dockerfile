@@ -39,8 +39,8 @@ RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
         -buildvcs=false \
         -trimpath \
         -ldflags='-s -w' \
-        -o /out/onboarding-tcp-forwarder \
-        ./cmd/onboarding-tcp-forwarder
+        -o /out/onboarding-test-tcp-forwarder \
+        ./cmd/onboarding-test-tcp-forwarder
 
 RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
@@ -49,8 +49,8 @@ RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
         -buildvcs=false \
         -trimpath \
         -ldflags='-s -w' \
-        -o /out/onboarding-a2a-get-task \
-        ./cmd/onboarding-a2a-get-task
+        -o /out/onboarding-test-a2a-get-task \
+        ./cmd/onboarding-test-a2a-get-task
 
 RUN mkdir -p /out/data
 
@@ -59,8 +59,8 @@ FROM gcr.io/distroless/static-debian13:nonroot AS runtime
 WORKDIR /app
 
 COPY --from=build --chown=65532:65532 /out/onboarding-provisioner /app/onboarding-provisioner
-COPY --from=build --chown=65532:65532 /out/onboarding-tcp-forwarder /app/onboarding-tcp-forwarder
-COPY --from=build --chown=65532:65532 /out/onboarding-a2a-get-task /app/onboarding-a2a-get-task
+COPY --from=build --chown=65532:65532 /out/onboarding-test-tcp-forwarder /app/onboarding-test-tcp-forwarder
+COPY --from=build --chown=65532:65532 /out/onboarding-test-a2a-get-task /app/onboarding-test-a2a-get-task
 COPY --from=build --chown=65532:65532 /out/data /app/data
 
 EXPOSE 8080

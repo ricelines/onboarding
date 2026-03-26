@@ -139,12 +139,12 @@ That distinction matters when you are debugging:
   - idempotent product bootstrap runner
 - `cmd/onboarding-provisioner`
   - MCP provisioner service
-- `cmd/onboarding-manager-forwarders`
-  - watches amber-manager and keeps TCP forwarders in sync with exposed scenario ports
-- `cmd/onboarding-tcp-forwarder`
-  - the small TCP proxy used by the forwarder monitor
-- `cmd/onboarding-a2a-get-task`
-  - helper for inspecting A2A task state from the command line
+- `cmd/onboarding-test-manager-forwarders`
+  - local/test helper that watches amber-manager and keeps TCP forwarders in sync with exposed scenario ports
+- `cmd/onboarding-test-tcp-forwarder`
+  - local/test TCP proxy used by the forwarder monitor
+- `cmd/onboarding-test-a2a-get-task`
+  - test helper for inspecting A2A task state from the command line
 - `amber/`
   - product manifests loaded by amber-manager
 - `agents/`
