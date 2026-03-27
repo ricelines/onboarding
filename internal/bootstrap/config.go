@@ -31,7 +31,6 @@ const (
 	envDefaultAgentModel                = "ONBOARDING_BOOTSTRAP_DEFAULT_AGENT_MODEL"
 	envDefaultAgentModelReasoningEffort = "ONBOARDING_BOOTSTRAP_DEFAULT_AGENT_MODEL_REASONING_EFFORT"
 	envOnboardingDeveloperPath          = "ONBOARDING_BOOTSTRAP_ONBOARDING_DEVELOPER_INSTRUCTIONS_PATH"
-	envOnboardingAgentsPath             = "ONBOARDING_BOOTSTRAP_ONBOARDING_AGENTS_MD_PATH"
 	envOnboardingWorkspaceAgentsPath    = "ONBOARDING_BOOTSTRAP_ONBOARDING_WORKSPACE_AGENTS_MD_PATH"
 	envOnboardingConfigTOMLPath         = "ONBOARDING_BOOTSTRAP_ONBOARDING_CONFIG_TOML_PATH"
 	envDefaultDeveloperPath             = "ONBOARDING_BOOTSTRAP_DEFAULT_AGENT_DEVELOPER_INSTRUCTIONS_PATH"
@@ -74,7 +73,6 @@ type Config struct {
 	DefaultAgentModel                     string
 	DefaultAgentModelReasoningEffort      string
 	OnboardingDeveloperInstructionsPath   string
-	OnboardingAgentsPath                  string
 	OnboardingWorkspaceAgentsPath         string
 	OnboardingConfigTOMLPath              string
 	DefaultAgentDeveloperInstructionsPath string
@@ -109,7 +107,6 @@ func FromEnv() (Config, error) {
 		DefaultAgentModel:                     strings.TrimSpace(os.Getenv(envDefaultAgentModel)),
 		DefaultAgentModelReasoningEffort:      strings.TrimSpace(os.Getenv(envDefaultAgentModelReasoningEffort)),
 		OnboardingDeveloperInstructionsPath:   strings.TrimSpace(os.Getenv(envOnboardingDeveloperPath)),
-		OnboardingAgentsPath:                  strings.TrimSpace(os.Getenv(envOnboardingAgentsPath)),
 		OnboardingWorkspaceAgentsPath:         strings.TrimSpace(os.Getenv(envOnboardingWorkspaceAgentsPath)),
 		OnboardingConfigTOMLPath:              strings.TrimSpace(os.Getenv(envOnboardingConfigTOMLPath)),
 		DefaultAgentDeveloperInstructionsPath: strings.TrimSpace(os.Getenv(envDefaultDeveloperPath)),

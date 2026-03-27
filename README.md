@@ -148,9 +148,9 @@ That distinction matters when you are debugging:
 - `amber/`
   - product manifests loaded by amber-manager
 - `agents/`
-  - `AGENTS.md`-style content for the onboarding agent and default child agent
+  - `AGENTS.md`-style content for the default child agent
 - `prompts/`
-  - developer-instruction prompt sources for those agents
+  - developer-instruction prompt sources for onboarding and the default child agent
 - `internal/bootstrap`
   - bootstrap configuration, state persistence, and reconciliation logic
 - `internal/provisioner`
@@ -165,7 +165,7 @@ That distinction matters when you are debugging:
 ## If You Need To Change Something
 
 - Changing onboarding conversation or behavior:
-  - start with `agents/onboarding-agent.md` and `prompts/onboarding-developer-instructions.md`
+  - start with `prompts/onboarding-developer-instructions.md`
 - Changing the default child-agent prompt or instructions:
   - start with `agents/default-user-agent.md` and `prompts/default-user-agent-developer-instructions.md`
 - Changing how the product is wired into amber-manager:

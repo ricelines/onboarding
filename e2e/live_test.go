@@ -424,7 +424,6 @@ func startLiveStackWithOptions(t *testing.T, opts liveStackOptions) *liveStack {
 			DefaultAgentModel:                   opts.defaultAgentModel,
 			DefaultAgentModelReasoningEffort:    opts.defaultAgentReasoningEffort,
 			OnboardingDeveloperInstructionsPath: filepath.Join(onboardingRoot, "prompts", "onboarding-developer-instructions.md"),
-			OnboardingAgentsPath:                filepath.Join(onboardingRoot, "agents", "onboarding-agent.md"),
 			OnboardingConfigTOMLPath:            opts.codexConfigTOMLPath,
 			DefaultAgentDeveloperInstructionsPath: filepath.Join(
 				onboardingRoot,

@@ -181,10 +181,6 @@ func (r *Runner) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	onboardingAgents, err := readOptionalFile(r.cfg.OnboardingAgentsPath)
-	if err != nil {
-		return err
-	}
 	onboardingWorkspaceAgents, err := readOptionalFile(r.cfg.OnboardingWorkspaceAgentsPath)
 	if err != nil {
 		return err
@@ -201,7 +197,6 @@ func (r *Runner) Run(ctx context.Context) error {
 		"model_reasoning_effort": r.cfg.OnboardingModelReasoningEffort,
 	}
 	setIfNonBlank(onboardingRootConfig, "developer_instructions", onboardingDeveloper)
-	setIfNonBlank(onboardingRootConfig, "agents_md", onboardingAgents)
 	setIfNonBlank(onboardingRootConfig, "workspace_agents_md", onboardingWorkspaceAgents)
 	setIfNonBlank(onboardingRootConfig, "config_toml", onboardingConfigTOML)
 
