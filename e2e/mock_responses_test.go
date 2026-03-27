@@ -46,6 +46,7 @@ type capturedResponsesRequest struct {
 type responsesConversationState struct {
 	AgentKind      string
 	RoomID         string
+	RoomIsDM       bool
 	OwnerUserID    string
 	TriggerEvent   string
 	BotUserID      string
@@ -381,6 +382,9 @@ func (s *mockResponsesServer) planFromToolOutput(state responsesConversationStat
 func (s *mockResponsesServer) planOnboardingEvent(state responsesConversationState, update matrixRoomUpdateEnvelope) (string, map[string]any, responsesConversationState) {
 	state.RoomID = update.RoomID
 	entries := roomUpdateEntries(update)
+	if roomIsDM, ok := classifyTwoPartyRoom(entries); ok {
+		state.RoomIsDM = roomIsDM
+	}
 	if activation, ok := s.activationRoom(update.RoomID); ok {
 		for _, entry := range entries {
 			if entry.Event.Type == "m.room.member" &&
@@ -406,10 +410,17 @@ func (s *mockResponsesServer) planOnboardingEvent(state responsesConversationSta
 	}
 
 	if invite, ok := firstInviteEntry(entries); ok {
+		if !state.RoomIsDM {
+			return s.nextResponseID(), assistantMessage(s.nextMessageID(), "ok"), state
+		}
 		state.TriggerEvent = invite.Event.EventID
 		return s.emitToolCall(state, "matrix.v1.rooms.join", map[string]any{
 			"room": update.RoomID,
 		})
+	}
+
+	if !state.RoomIsDM {
+		return s.nextResponseID(), assistantMessage(s.nextMessageID(), "ok"), state
 	}
 
 	if message, ok := latestMessageEntry(entries, wantsNewAgent); ok {
@@ -790,6 +801,31 @@ func latestExternalSender(entries []matrixRoomUpdateEntry) string {
 		}
 	}
 	return ""
+}
+
+func classifyTwoPartyRoom(entries []matrixRoomUpdateEntry) (bool, bool) {
+	members := make(map[string]string)
+	for _, entry := range entries {
+		if entry.Event.Type != "m.room.member" {
+			continue
+		}
+		membership := strings.TrimSpace(stringValue(entry.Event.Content["membership"]))
+		if membership == "" || membership == "leave" {
+			continue
+		}
+		userID := strings.TrimSpace(entry.Event.StateKey)
+		if userID == "" {
+			userID = strings.TrimSpace(entry.Event.Sender)
+		}
+		if userID == "" {
+			continue
+		}
+		members[userID] = membership
+	}
+	if len(members) == 0 {
+		return false, false
+	}
+	return len(members) == 2, true
 }
 
 func messageBody(event matrixRoomUpdateEvt) string {

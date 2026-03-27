@@ -121,6 +121,7 @@ func TestPlanResponseFallsBackToCallState(t *testing.T) {
 	server.calls["call-join"] = responsesConversationState{
 		AgentKind:     agentKindOnboarding,
 		RoomID:        "!dm:test",
+		RoomIsDM:      true,
 		PendingTool:   "matrix.v1.rooms.join",
 		PendingCallID: "call-join",
 		ToolNames: map[string]string{
@@ -161,6 +162,7 @@ func TestPlanResponseIgnoresStaleFunctionOutputWhenNewEventArrives(t *testing.T)
 	server.calls["call-old"] = responsesConversationState{
 		AgentKind:     agentKindOnboarding,
 		RoomID:        "!dm:test",
+		RoomIsDM:      true,
 		PendingTool:   "",
 		PendingCallID: "",
 		ToolNames: map[string]string{
@@ -181,7 +183,7 @@ func TestPlanResponseIgnoresStaleFunctionOutputWhenNewEventArrives(t *testing.T)
 				"content": []any{
 					map[string]any{
 						"type": "input_text",
-						"text": `{"kind":"matrix_room_update","room_id":"!dm:test","updates":[{"room_section":"join","timeline":[{"event_id":"$yes","room_id":"!dm:test","sender":"@owner:test","type":"m.room.message","content":{"body":"yes"}}]}]}`,
+						"text": `{"kind":"matrix_room_update","room_id":"!dm:test","updates":[{"room_section":"join","state":[{"event_id":"$owner","room_id":"!dm:test","sender":"@owner:test","state_key":"@owner:test","type":"m.room.member","content":{"membership":"join"}},{"event_id":"$bot","room_id":"!dm:test","sender":"@onboarding:test","state_key":"@onboarding:test","type":"m.room.member","content":{"membership":"join"}}],"timeline":[{"event_id":"$yes","room_id":"!dm:test","sender":"@owner:test","type":"m.room.message","content":{"body":"yes"}}]}]}`,
 					},
 				},
 			},
@@ -223,6 +225,83 @@ func TestRecordStateRemovesConsumedCall(t *testing.T) {
 	}
 	if _, ok := server.states["resp-next"]; !ok {
 		t.Fatal("next response state was not stored")
+	}
+}
+
+func TestPlanResponseIgnoresOnboardingRequestInNonDMRoom(t *testing.T) {
+	t.Parallel()
+
+	server := &mockResponsesServer{
+		states: make(map[string]responsesConversationState),
+		calls:  make(map[string]responsesConversationState),
+	}
+
+	payload := map[string]any{
+		"input": []any{
+			map[string]any{
+				"type": "message",
+				"role": "user",
+				"content": []any{
+					map[string]any{
+						"type": "input_text",
+						"text": `{"kind":"matrix_room_update","room_id":"!room:test","updates":[{"room_section":"join","state":[{"event_id":"$owner","room_id":"!room:test","sender":"@owner:test","state_key":"@owner:test","type":"m.room.member","content":{"membership":"join"}},{"event_id":"$bot","room_id":"!room:test","sender":"@onboarding:test","state_key":"@onboarding:test","type":"m.room.member","content":{"membership":"join"}},{"event_id":"$other","room_id":"!room:test","sender":"@other:test","state_key":"@other:test","type":"m.room.member","content":{"membership":"join"}}],"timeline":[{"event_id":"$msg","room_id":"!room:test","sender":"@owner:test","type":"m.room.message","content":{"body":"I want a new agent"}}]}]}`,
+					},
+				},
+			},
+		},
+		"tools": []any{
+			map[string]any{"name": "mcp__1__onboarding_v1_user_agents_provision_initial"},
+		},
+	}
+
+	_, item, state := server.planResponse(payload)
+	if got, _ := item["type"].(string); got != "message" {
+		t.Fatalf("response item type = %q, want message", got)
+	}
+	if state.PendingTool != "" {
+		t.Fatalf("pending tool = %q, want none", state.PendingTool)
+	}
+	if state.RoomIsDM {
+		t.Fatal("non-DM room was marked as direct message")
+	}
+}
+
+func TestPlanResponseIgnoresInviteToNonDMRoom(t *testing.T) {
+	t.Parallel()
+
+	server := &mockResponsesServer{
+		states: make(map[string]responsesConversationState),
+		calls:  make(map[string]responsesConversationState),
+	}
+
+	payload := map[string]any{
+		"input": []any{
+			map[string]any{
+				"type": "message",
+				"role": "user",
+				"content": []any{
+					map[string]any{
+						"type": "input_text",
+						"text": `{"kind":"matrix_room_update","room_id":"!room:test","updates":[{"room_section":"invite","state":[{"event_id":"$owner","room_id":"!room:test","sender":"@owner:test","state_key":"@owner:test","type":"m.room.member","content":{"membership":"join"}},{"event_id":"$other","room_id":"!room:test","sender":"@other:test","state_key":"@other:test","type":"m.room.member","content":{"membership":"join"}},{"event_id":"$invite","room_id":"!room:test","sender":"@owner:test","state_key":"@onboarding:test","type":"m.room.member","content":{"membership":"invite"}}]}]}`,
+					},
+				},
+			},
+		},
+		"tools": []any{
+			map[string]any{"name": "mcp__1__onboarding_v1_user_agents_provision_initial"},
+			map[string]any{"name": "mcp__0__matrix_v1_rooms_join"},
+		},
+	}
+
+	_, item, state := server.planResponse(payload)
+	if got, _ := item["type"].(string); got != "message" {
+		t.Fatalf("response item type = %q, want message", got)
+	}
+	if state.PendingTool != "" {
+		t.Fatalf("pending tool = %q, want none", state.PendingTool)
+	}
+	if state.RoomIsDM {
+		t.Fatal("non-DM invite was marked as direct message")
 	}
 }
 
