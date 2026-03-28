@@ -29,12 +29,13 @@ type mockResponsesServer struct {
 
 	counter uint64
 
-	mu     sync.Mutex
-	reqs   []capturedResponsesRequest
-	states map[string]responsesConversationState
-	calls  map[string]responsesConversationState
-	rooms  map[string]activationRoomState
-	debug  bool
+	mu         sync.Mutex
+	reqs       []capturedResponsesRequest
+	states     map[string]responsesConversationState
+	roomStates map[string]responsesConversationState
+	calls      map[string]responsesConversationState
+	rooms      map[string]activationRoomState
+	debug      bool
 }
 
 type capturedResponsesRequest struct {
@@ -114,12 +115,13 @@ func startMockResponsesServer(t *testing.T) *mockResponsesServer {
 	}
 
 	srv := &mockResponsesServer{
-		URL:      "http://" + listener.Addr().String(),
-		listener: listener,
-		states:   make(map[string]responsesConversationState),
-		calls:    make(map[string]responsesConversationState),
-		rooms:    make(map[string]activationRoomState),
-		debug:    os.Getenv("ONBOARDING_DEBUG_RESPONSES") != "",
+		URL:        "http://" + listener.Addr().String(),
+		listener:   listener,
+		states:     make(map[string]responsesConversationState),
+		roomStates: make(map[string]responsesConversationState),
+		calls:      make(map[string]responsesConversationState),
+		rooms:      make(map[string]activationRoomState),
+		debug:      os.Getenv("ONBOARDING_DEBUG_RESPONSES") != "",
 	}
 	srv.server = &http.Server{Handler: http.HandlerFunc(srv.handle)}
 	go func() {
@@ -226,6 +228,15 @@ func (s *mockResponsesServer) recordState(responseID string, state responsesConv
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if s.states == nil {
+		s.states = make(map[string]responsesConversationState)
+	}
+	if s.roomStates == nil {
+		s.roomStates = make(map[string]responsesConversationState)
+	}
+	if s.calls == nil {
+		s.calls = make(map[string]responsesConversationState)
+	}
 	if consumedCallID != "" {
 		delete(s.calls, consumedCallID)
 	}
@@ -233,6 +244,9 @@ func (s *mockResponsesServer) recordState(responseID string, state responsesConv
 		return
 	}
 	s.states[responseID] = state
+	if key := roomConversationKey(state.AgentKind, state.RoomID); key != "" {
+		s.roomStates[key] = state
+	}
 	if state.PendingCallID != "" {
 		s.calls[state.PendingCallID] = state
 	}
@@ -269,11 +283,17 @@ func (s *mockResponsesServer) logPlan(payload map[string]any, state responsesCon
 }
 
 func (s *mockResponsesServer) planResponse(payload map[string]any) (string, map[string]any, responsesConversationState) {
+	update, hasUpdate := latestMatrixRoomUpdate(payload["input"])
 	prevState := s.stateFor(stringValue(payload["previous_response_id"]))
 	state := prevState
 	state = state.withToolCatalog(toolCatalogFromPayload(payload["tools"]))
 	if state.AgentKind == "" {
 		state.AgentKind = detectAgentKindFromPayload(payload, state.ToolNames)
+	}
+	if state.AgentKind != "" && hasUpdate {
+		if roomState := s.stateForRoom(state.AgentKind, update.RoomID); roomState.AgentKind != "" {
+			state = roomState.withToolCatalog(toolCatalogFromPayload(payload["tools"]))
+		}
 	}
 
 	if output, ok := latestFunctionCallOutput(payload["input"]); ok {
@@ -288,8 +308,7 @@ func (s *mockResponsesServer) planResponse(payload map[string]any) (string, map[
 		}
 	}
 
-	update, ok := latestMatrixRoomUpdate(payload["input"])
-	if !ok {
+	if !hasUpdate {
 		return s.nextResponseID(), assistantMessage(s.nextMessageID(), "ok"), state
 	}
 
@@ -483,6 +502,16 @@ func (s *mockResponsesServer) stateFor(responseID string) responsesConversationS
 	return s.states[responseID]
 }
 
+func (s *mockResponsesServer) stateForRoom(agentKind, roomID string) responsesConversationState {
+	key := roomConversationKey(agentKind, roomID)
+	if key == "" {
+		return responsesConversationState{}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.roomStates[key]
+}
+
 func (s *mockResponsesServer) stateForCall(callID string) responsesConversationState {
 	if callID == "" {
 		return responsesConversationState{}
@@ -525,6 +554,15 @@ func (s *mockResponsesServer) nextCallID() string {
 
 func (s *mockResponsesServer) nextFunctionCallID() string {
 	return fmt.Sprintf("fc-%d", atomic.AddUint64(&s.counter, 1))
+}
+
+func roomConversationKey(agentKind, roomID string) string {
+	agentKind = strings.TrimSpace(agentKind)
+	roomID = strings.TrimSpace(roomID)
+	if agentKind == "" || roomID == "" {
+		return ""
+	}
+	return agentKind + "\x00" + roomID
 }
 
 func assistantMessage(id, text string) map[string]any {

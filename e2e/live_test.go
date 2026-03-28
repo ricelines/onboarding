@@ -303,7 +303,19 @@ func startLiveStackWithOptions(t *testing.T, opts liveStackOptions) *liveStack {
 
 	ensureCommand(t, "docker")
 	ensureCommand(t, "go")
+	cleanupOrphanedOnboardingContainers(t)
 	cleanupOrphanedAmberNetworks(t)
+
+	stack := &liveStack{}
+	started := false
+	defer func() {
+		if started {
+			return
+		}
+		if err := closeStartupArtifacts(stack); err != nil {
+			t.Logf("cleanup partial live stack: %v", err)
+		}
+	}()
 
 	onboardingRoot := repoRoot(t)
 	amberManagerImage := strings.TrimSpace(os.Getenv(managerImageEnvVar))
@@ -326,12 +338,14 @@ func startLiveStackWithOptions(t *testing.T, opts liveStackOptions) *liveStack {
 	t.Logf("phase start_live_stack.build_onboarding_image: %s", time.Since(buildOnboardingStart))
 	startTuwunelStart := time.Now()
 	tuwunel := startTuwunel(t)
+	stack.tuwunel = tuwunel
 	t.Logf("phase start_live_stack.start_tuwunel: %s", time.Since(startTuwunelStart))
 
 	var responses *mockResponsesServer
 	if opts.useMockResponses {
 		startResponsesStart := time.Now()
 		responses = startMockResponsesServer(t)
+		stack.responses = responses
 		t.Logf("phase start_live_stack.start_mock_responses: %s", time.Since(startResponsesStart))
 	}
 
@@ -378,6 +392,9 @@ func startLiveStackWithOptions(t *testing.T, opts liveStackOptions) *liveStack {
 		managerSourceDir,
 		managerPort,
 	)
+	stack.manager = managerProc
+	stack.managerURL = managerURL
+	stack.managerData = managerData
 	waitForManagerReady(t, managerURL, managerProc)
 	forwarderMonitor, err := managerforwarders.Start(context.Background(), managerforwarders.Config{
 		ManagerContainerName: managerProc.containerName,
@@ -389,53 +406,73 @@ func startLiveStackWithOptions(t *testing.T, opts liveStackOptions) *liveStack {
 	if err != nil {
 		t.Fatalf("start manager forwarders: %v", err)
 	}
+	stack.forwarders = forwarderMonitor
 	t.Logf("phase start_live_stack.start_manager: %s", time.Since(startManagerStart))
 
-	stack := &liveStack{
-		manager:       managerProc,
-		managerURL:    managerURL,
-		managerData:   managerData,
-		forwarders:    forwarderMonitor,
-		tuwunel:       tuwunel,
-		responses:     responses,
-		managerClient: managerclient.NewClient(managerURL),
-		httpClient:    &http.Client{Timeout: 30 * time.Second},
-		bootstrapConfigValue: bootstrap.Config{
-			StatePath:                           filepath.Join(t.TempDir(), "bootstrap-state.json"),
-			MatrixHomeserverURL:                 tuwunel.baseURL(),
-			MatrixServerName:                    serverName,
-			RegistrationToken:                   registrationToken,
-			ManagerURL:                          managerURL,
-			MatrixBindableServiceName:           "matrix",
-			ManagerBindableServiceName:          "amber-manager-api",
-			SharedResponsesBindableServiceName:  "responses-api",
-			BootstrapAdminUsername:              bootstrapAdminUsername,
-			BootstrapAdminPassword:              bootstrapAdminPassword,
-			OnboardingBotUsername:               onboardingBotUsername,
-			OnboardingBotPassword:               onboardingBotPassword,
-			WelcomeRoomAliasLocalpart:           "welcome",
-			ProvisionerSourceURL:                managerSources.ProvisionerSourceURL,
-			OnboardingSourceURL:                 managerSources.OnboardingSourceURL,
-			DefaultAgentSourceURL:               managerSources.DefaultAgentSourceURL,
-			AuthProxySourceURL:                  managerSources.AuthProxySourceURL,
-			CodexAuthJSONPath:                   opts.codexAuthJSONPath,
-			OnboardingModel:                     opts.onboardingModel,
-			OnboardingModelReasoningEffort:      opts.onboardingReasoningEffort,
-			DefaultAgentModel:                   opts.defaultAgentModel,
-			DefaultAgentModelReasoningEffort:    opts.defaultAgentReasoningEffort,
-			OnboardingDeveloperInstructionsPath: filepath.Join(onboardingRoot, "prompts", "onboarding-developer-instructions.md"),
-			OnboardingConfigTOMLPath:            opts.codexConfigTOMLPath,
-			DefaultAgentDeveloperInstructionsPath: filepath.Join(
-				onboardingRoot,
-				"prompts",
-				"default-user-agent-developer-instructions.md",
-			),
-			DefaultAgentAgentsPath:     filepath.Join(onboardingRoot, "agents", "default-user-agent.md"),
-			DefaultAgentConfigTOMLPath: opts.codexConfigTOMLPath,
-		},
+	stack.managerClient = managerclient.NewClient(managerURL)
+	stack.httpClient = &http.Client{Timeout: 30 * time.Second}
+	stack.bootstrapConfigValue = bootstrap.Config{
+		StatePath:                           filepath.Join(t.TempDir(), "bootstrap-state.json"),
+		MatrixHomeserverURL:                 tuwunel.baseURL(),
+		MatrixServerName:                    serverName,
+		RegistrationToken:                   registrationToken,
+		ManagerURL:                          managerURL,
+		MatrixBindableServiceName:           "matrix",
+		ManagerBindableServiceName:          "amber-manager-api",
+		SharedResponsesBindableServiceName:  "responses-api",
+		BootstrapAdminUsername:              bootstrapAdminUsername,
+		BootstrapAdminPassword:              bootstrapAdminPassword,
+		OnboardingBotUsername:               onboardingBotUsername,
+		OnboardingBotPassword:               onboardingBotPassword,
+		WelcomeRoomAliasLocalpart:           "welcome",
+		ProvisionerSourceURL:                managerSources.ProvisionerSourceURL,
+		OnboardingSourceURL:                 managerSources.OnboardingSourceURL,
+		DefaultAgentSourceURL:               managerSources.DefaultAgentSourceURL,
+		AuthProxySourceURL:                  managerSources.AuthProxySourceURL,
+		CodexAuthJSONPath:                   opts.codexAuthJSONPath,
+		OnboardingModel:                     opts.onboardingModel,
+		OnboardingModelReasoningEffort:      opts.onboardingReasoningEffort,
+		DefaultAgentModel:                   opts.defaultAgentModel,
+		DefaultAgentModelReasoningEffort:    opts.defaultAgentReasoningEffort,
+		OnboardingDeveloperInstructionsPath: filepath.Join(onboardingRoot, "prompts", "onboarding-developer-instructions.md"),
+		OnboardingConfigTOMLPath:            opts.codexConfigTOMLPath,
+		DefaultAgentDeveloperInstructionsPath: filepath.Join(
+			onboardingRoot,
+			"prompts",
+			"default-user-agent-developer-instructions.md",
+		),
+		DefaultAgentAgentsPath:     filepath.Join(onboardingRoot, "agents", "default-user-agent.md"),
+		DefaultAgentConfigTOMLPath: opts.codexConfigTOMLPath,
 	}
-
+	started = true
 	return stack
+}
+
+func closeStartupArtifacts(s *liveStack) error {
+	var errs []error
+
+	if s == nil {
+		return nil
+	}
+	if s.forwarders != nil {
+		if err := s.forwarders.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if s.manager != nil {
+		if err := s.manager.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if s.responses != nil {
+		s.responses.Close()
+	}
+	if s.tuwunel != nil {
+		if err := s.tuwunel.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func (s *liveStack) Close() error {
@@ -1346,6 +1383,48 @@ func cleanupOrphanedAmberNetworks(t *testing.T) {
 
 	if len(removed) > 0 {
 		t.Logf("cleaned %d orphaned amber docker networks", len(removed))
+	}
+}
+
+func cleanupOrphanedOnboardingContainers(t *testing.T) {
+	t.Helper()
+
+	output, err := runCommand(30*time.Second, "docker", "ps", "--format", "{{.Names}}")
+	if err != nil {
+		t.Fatalf("list onboarding test containers: %v\n%s", err, output)
+	}
+
+	prefixes := []string{
+		"onboarding-manager-",
+		"onboarding-e2e-",
+		"onboarding-manager-forwarder-",
+	}
+	var removed []string
+	for _, name := range strings.Split(output, "\n") {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		matched := false
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(name, prefix) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			continue
+		}
+		stopOutput, err := runCommand(20*time.Second, "docker", "stop", "-t", "1", name)
+		if err != nil && !strings.Contains(stopOutput, "No such container") {
+			t.Logf("skip docker container %s during stop: %v\n%s", name, err, stopOutput)
+			continue
+		}
+		removed = append(removed, name)
+	}
+
+	if len(removed) > 0 {
+		t.Logf("cleaned %d orphaned onboarding docker containers", len(removed))
 	}
 }
 

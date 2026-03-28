@@ -228,6 +228,51 @@ func TestRecordStateRemovesConsumedCall(t *testing.T) {
 	}
 }
 
+func TestPlanResponseFallsBackToRoomStateWithoutPreviousResponseID(t *testing.T) {
+	t.Parallel()
+
+	server := &mockResponsesServer{
+		states:     make(map[string]responsesConversationState),
+		roomStates: make(map[string]responsesConversationState),
+		calls:      make(map[string]responsesConversationState),
+	}
+	server.roomStates[roomConversationKey(agentKindOnboarding, "!dm:test")] = responsesConversationState{
+		AgentKind:   agentKindOnboarding,
+		RoomID:      "!dm:test",
+		RoomIsDM:    true,
+		OwnerUserID: "@owner:test",
+		ToolNames: map[string]string{
+			"onboarding.v1.user_agents.provision_initial": "mcp__1__onboarding_v1_user_agents_provision_initial",
+		},
+	}
+
+	payload := map[string]any{
+		"input": []any{
+			map[string]any{
+				"type": "message",
+				"role": "user",
+				"content": []any{
+					map[string]any{
+						"type": "input_text",
+						"text": `{"kind":"matrix_room_update","room_id":"!dm:test","updates":[{"room_section":"join","timeline":[{"event_id":"$yes","room_id":"!dm:test","sender":"@owner:test","type":"m.room.message","content":{"body":"yes"}}]}]}`,
+					},
+				},
+			},
+		},
+		"tools": []any{
+			map[string]any{"name": "mcp__1__onboarding_v1_user_agents_provision_initial"},
+		},
+	}
+
+	_, item, state := server.planResponse(payload)
+	if got, _ := item["name"].(string); got != "mcp__1__onboarding_v1_user_agents_provision_initial" {
+		t.Fatalf("emitted tool name = %q, want provisioning tool", got)
+	}
+	if state.PendingTool != "onboarding.v1.user_agents.provision_initial" {
+		t.Fatalf("pending tool = %q, want provisioning tool", state.PendingTool)
+	}
+}
+
 func TestPlanResponseIgnoresOnboardingRequestInNonDMRoom(t *testing.T) {
 	t.Parallel()
 

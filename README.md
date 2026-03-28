@@ -74,7 +74,7 @@ After a successful run you should have:
 
 - a bootstrap admin Matrix user
 - an onboarding bot Matrix user
-- a private `#welcome:<server>` room containing a link to DM the onboarding bot
+- a public `#welcome:<server>` room containing a link to DM the onboarding bot
 - an onboarding scenario in amber-manager
 - a provisioner scenario in amber-manager
 - an auth-proxy scenario as well, if bootstrap had to create the shared responses service

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"reflect"
 	"strings"
@@ -200,11 +201,19 @@ func (r *Runner) Run(ctx context.Context) error {
 	setIfNonBlank(onboardingRootConfig, "workspace_agents_md", onboardingWorkspaceAgents)
 	setIfNonBlank(onboardingRootConfig, "config_toml", onboardingConfigTOML)
 
+	onboardingProviderScenarios := map[string]string{
+		"provisioning_mcp": provisionerScenarioID,
+	}
+	if authProxyScenarioID != "" {
+		onboardingProviderScenarios["responses_api"] = authProxyScenarioID
+	}
+
 	onboardingScenarioID, err := r.ensureManagedScenario(ctx, ensureScenarioRequest{
-		Kind:               metadataKindOnboarding,
-		ExistingScenarioID: state.OnboardingScenarioID,
-		SourceURL:          r.cfg.OnboardingSourceURL,
-		RootConfig:         onboardingRootConfig,
+		Kind:                          metadataKindOnboarding,
+		ExistingScenarioID:            state.OnboardingScenarioID,
+		SourceURL:                     r.cfg.OnboardingSourceURL,
+		RootConfig:                    onboardingRootConfig,
+		ExternalSlotProviderScenarios: onboardingProviderScenarios,
 		ExternalSlots: map[string]managerclient.ExternalSlotBindingRequest{
 			"matrix": {
 				BindableServiceID: matrixServiceID,
@@ -241,12 +250,13 @@ func (r *Runner) Run(ctx context.Context) error {
 }
 
 type ensureScenarioRequest struct {
-	Kind               string
-	ExistingScenarioID string
-	SourceURL          string
-	RootConfig         map[string]any
-	ExternalSlots      map[string]managerclient.ExternalSlotBindingRequest
-	Metadata           map[string]any
+	Kind                          string
+	ExistingScenarioID            string
+	SourceURL                     string
+	RootConfig                    map[string]any
+	ExternalSlots                 map[string]managerclient.ExternalSlotBindingRequest
+	ExternalSlotProviderScenarios map[string]string
+	Metadata                      map[string]any
 }
 
 func (r *Runner) ensureSharedResponsesService(ctx context.Context, existingScenarioID string) (string, string, error) {
@@ -316,7 +326,7 @@ func (r *Runner) ensureManagedScenario(ctx context.Context, req ensureScenarioRe
 
 	if detail.SourceURL != req.SourceURL ||
 		!rootConfigMapsEqual(detail.RootConfig, detail.SecretRootConfigPaths, req.RootConfig) ||
-		!bindingMapsEqual(detail.ExternalSlots, req.ExternalSlots) ||
+		!bindingMapsEqual(detail.ExternalSlots, req.ExternalSlots, req.ExternalSlotProviderScenarios) ||
 		!jsonMapsEqual(detail.Metadata, req.Metadata) ||
 		!detail.BundleStored {
 		var sourceURL *string
@@ -521,8 +531,8 @@ func (r *Runner) ensureWelcomeRoom(ctx context.Context, adminClient *mautrix.Cli
 	if !found {
 		created, err := adminClient.CreateRoom(ctx, &mautrix.ReqCreateRoom{
 			Name:          "Welcome",
-			Visibility:    "private",
-			Preset:        "private_chat",
+			Visibility:    "public",
+			Preset:        "public_chat",
 			RoomAliasName: r.cfg.WelcomeRoomAliasLocalpart,
 		})
 		if err != nil {
@@ -530,7 +540,28 @@ func (r *Runner) ensureWelcomeRoom(ctx context.Context, adminClient *mautrix.Cli
 		}
 		roomID = created.RoomID
 	}
+	if err := ensureRoomIsPublic(ctx, adminClient, roomID); err != nil {
+		return "", fmt.Errorf("ensure welcome room is public: %w", err)
+	}
 	return roomID, nil
+}
+
+func ensureRoomIsPublic(ctx context.Context, client *mautrix.Client, roomID id.RoomID) error {
+	if _, err := client.SendStateEvent(ctx, roomID, event.StateJoinRules, "", &event.JoinRulesEventContent{
+		JoinRule: event.JoinRulePublic,
+	}); err != nil {
+		return fmt.Errorf("set join rules for %s: %w", roomID, err)
+	}
+	if _, err := client.MakeRequest(
+		ctx,
+		http.MethodPut,
+		client.BuildClientURL("v3", "directory", "list", "room", roomID),
+		map[string]string{"visibility": "public"},
+		nil,
+	); err != nil {
+		return fmt.Errorf("set room directory visibility for %s: %w", roomID, err)
+	}
+	return nil
 }
 
 func (r *Runner) ensureWelcomeMessage(ctx context.Context, botClient *mautrix.Client, roomID id.RoomID, botUserID id.UserID) error {
@@ -736,12 +767,26 @@ func setIfNonBlank(target map[string]any, key, value string) {
 	target[key] = value
 }
 
-func bindingMapsEqual(current map[string]managerclient.ExternalSlotBindingResponse, want map[string]managerclient.ExternalSlotBindingRequest) bool {
+func bindingMapsEqual(
+	current map[string]managerclient.ExternalSlotBindingResponse,
+	want map[string]managerclient.ExternalSlotBindingRequest,
+	providerScenarios map[string]string,
+) bool {
 	if len(current) != len(want) {
 		return false
 	}
 	for name, binding := range want {
-		if current[name].BindableServiceID != binding.BindableServiceID {
+		currentBinding, ok := current[name]
+		if !ok {
+			return false
+		}
+		if currentBinding.BindableServiceID == binding.BindableServiceID {
+			continue
+		}
+		if providerScenarios[name] != "" && currentBinding.ProviderScenarioID == providerScenarios[name] {
+			continue
+		}
+		if currentBinding.BindableServiceID != binding.BindableServiceID {
 			return false
 		}
 	}
