@@ -117,6 +117,48 @@ func TestLiveBootstrapAndOnboardingWorkflowRealCodex(t *testing.T) {
 	t.Logf("real onboarding welcome: %q", welcomeBody)
 	t.Logf("phase create_onboarding_dm: %s", time.Since(initialDMStart))
 
+	questionStart := time.Now()
+	if _, err := ownerClient.SendText(ctx, dmRoomID, "What does an agent do?"); err != nil {
+		t.Fatalf("send onboarding question: %v", err)
+	}
+	questionBody, err := waitForMessageBodyUntil(
+		ownerClient,
+		dmRoomID,
+		onboardingBotUserID,
+		roomEventTimeout,
+		func(body string) bool {
+			trimmed := strings.TrimSpace(body)
+			if trimmed == "" {
+				return false
+			}
+			if strings.EqualFold(trimmed, strings.TrimSpace(welcomeBody)) {
+				return false
+			}
+			if containsAnyFold(trimmed, "can't read", "cannot read", "encrypted message", "ciphertext") {
+				return false
+			}
+			return containsAnyFold(trimmed, "agent", "bot", "assistant", "help")
+		},
+		"helpful onboarding answer",
+		"agent",
+	)
+	if err != nil {
+		if messages, messageErr := collectMessageBodies(ownerClient, dmRoomID, onboardingBotUserID); messageErr != nil {
+			t.Logf("failed to collect onboarding DM messages: %v", messageErr)
+		} else {
+			t.Logf("onboarding DM messages from onboarding: %#v", messages)
+		}
+		if e2eProfilingEnabled() {
+			logScenarioRoomTaskTrace(t, stack, state2.OnboardingScenarioID, dmRoomID, "onboarding.question.failure")
+		}
+		t.Fatal(err)
+	}
+	t.Logf("phase onboarding.wait_question_reply: %s", time.Since(questionStart))
+	t.Logf("real onboarding question reply: %q", questionBody)
+	if e2eProfilingEnabled() {
+		logScenarioRoomTaskTrace(t, stack, state2.OnboardingScenarioID, dmRoomID, "onboarding.question")
+	}
+
 	provisionStart := time.Now()
 	if _, err := ownerClient.SendText(ctx, dmRoomID, "yes"); err != nil {
 		t.Fatalf("send onboarding confirmation: %v", err)
@@ -790,6 +832,16 @@ func containsAllFold(body string, parts ...string) bool {
 		}
 	}
 	return true
+}
+
+func containsAnyFold(body string, parts ...string) bool {
+	body = strings.ToLower(body)
+	for _, part := range parts {
+		if strings.Contains(body, strings.ToLower(strings.TrimSpace(part))) {
+			return true
+		}
+	}
+	return false
 }
 
 func looksLikeGreeting(body string) bool {
