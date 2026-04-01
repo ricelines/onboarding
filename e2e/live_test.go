@@ -280,11 +280,11 @@ func startRealLiveStack(t *testing.T) *liveStack {
 	}
 	defaultAgentModel := strings.TrimSpace(os.Getenv(defaultAgentModelEnvVar))
 	if defaultAgentModel == "" {
-		defaultAgentModel = "gpt-5.4-mini"
+		defaultAgentModel = "gpt-5.4"
 	}
 	defaultAgentReasoningEffort := strings.TrimSpace(os.Getenv(defaultAgentReasoningEnvVar))
 	if defaultAgentReasoningEffort == "" {
-		defaultAgentReasoningEffort = "medium"
+		defaultAgentReasoningEffort = "low"
 	}
 
 	return startLiveStackWithOptions(t, liveStackOptions{

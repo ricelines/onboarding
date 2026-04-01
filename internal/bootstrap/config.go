@@ -43,9 +43,9 @@ const (
 	defaultSharedResponsesServiceName     = "responses-api"
 	defaultWelcomeRoomAliasLocalpart      = "welcome"
 	defaultOnboardingModel                = "gpt-5.4-mini"
-	defaultDefaultAgentModel              = "gpt-5.4-mini"
+	defaultDefaultAgentModel              = "gpt-5.4"
 	defaultOnboardingModelReasoningEffort = "medium"
-	defaultDefaultAgentReasoningEffort    = "medium"
+	defaultDefaultAgentReasoningEffort    = "low"
 )
 
 type Config struct {

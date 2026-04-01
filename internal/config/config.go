@@ -25,8 +25,8 @@ const (
 	envRevokedSourceURLs                  = "ONBOARDING_REVOKED_SOURCE_URLS"
 	defaultListenAddr                     = ":8080"
 	defaultMatrixBindableServiceName      = "matrix"
-	defaultAgentModelValue                = "gpt-5.4-mini"
-	defaultAgentModelReasoningEffortValue = "medium"
+	defaultAgentModelValue                = "gpt-5.4"
+	defaultAgentModelReasoningEffortValue = "low"
 )
 
 type Config struct {
