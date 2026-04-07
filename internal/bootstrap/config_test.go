@@ -1,6 +1,9 @@
 package bootstrap
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestFromEnvDefaultsProvisionedUserAgentModelToGPT54Low(t *testing.T) {
 	t.Setenv(envStatePath, "/tmp/bootstrap-state.json")
@@ -21,7 +24,7 @@ func TestFromEnvDefaultsProvisionedUserAgentModelToGPT54Low(t *testing.T) {
 	t.Setenv(envOnboardingSourceURL, "file:///onboarding-agent.json5")
 	t.Setenv(envDefaultAgentSourceURL, "file:///user-agent.json5")
 	t.Setenv(envAuthProxySourceURL, "")
-	t.Setenv(envCodexAuthJSONPath, "")
+	t.Setenv(envCodexAuthJSONPath, "/tmp/auth.json")
 	t.Setenv(envOnboardingModel, "")
 	t.Setenv(envOnboardingModelReasoningEffort, "")
 	t.Setenv(envDefaultAgentModel, "")
@@ -43,5 +46,25 @@ func TestFromEnvDefaultsProvisionedUserAgentModelToGPT54Low(t *testing.T) {
 	}
 	if cfg.DefaultAgentModelReasoningEffort != "low" {
 		t.Fatalf("DefaultAgentModelReasoningEffort = %q, want low", cfg.DefaultAgentModelReasoningEffort)
+	}
+}
+
+func TestFromEnvRequiresCodexAuthJSONPath(t *testing.T) {
+	t.Setenv(envStatePath, "/tmp/bootstrap-state.json")
+	t.Setenv(envMatrixHomeserverURL, "http://matrix.test")
+	t.Setenv(envMatrixServerName, "matrix.test")
+	t.Setenv(envManagerURL, "http://manager.test")
+	t.Setenv(envBootstrapAdminUsername, "bootstrap-admin")
+	t.Setenv(envBootstrapAdminPassword, "bootstrap-admin-pass")
+	t.Setenv(envOnboardingBotUsername, "onboarding")
+	t.Setenv(envOnboardingBotPassword, "onboarding-pass")
+	t.Setenv(envProvisionerSourceURL, "file:///provisioner.json5")
+	t.Setenv(envOnboardingSourceURL, "file:///onboarding-agent.json5")
+	t.Setenv(envDefaultAgentSourceURL, "file:///user-agent.json5")
+	t.Setenv(envCodexAuthJSONPath, "")
+
+	_, err := FromEnv()
+	if err == nil || !strings.Contains(err.Error(), envCodexAuthJSONPath+" is required") {
+		t.Fatalf("FromEnv() error = %v, want missing %s", err, envCodexAuthJSONPath)
 	}
 }

@@ -190,8 +190,13 @@ func (r *Runner) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	onboardingAuthJSON, err := readCodexAuthJSON(r.cfg.CodexAuthJSONPath)
+	if err != nil {
+		return err
+	}
 
 	onboardingRootConfig := map[string]any{
+		"auth_json":              onboardingAuthJSON,
 		"matrix_username":        r.cfg.OnboardingBotUsername,
 		"matrix_password":        r.cfg.OnboardingBotPassword,
 		"model":                  r.cfg.OnboardingModel,
@@ -201,25 +206,14 @@ func (r *Runner) Run(ctx context.Context) error {
 	setIfNonBlank(onboardingRootConfig, "workspace_agents_md", onboardingWorkspaceAgents)
 	setIfNonBlank(onboardingRootConfig, "config_toml", onboardingConfigTOML)
 
-	onboardingProviderScenarios := map[string]string{
-		"provisioning_mcp": provisionerScenarioID,
-	}
-	if authProxyScenarioID != "" {
-		onboardingProviderScenarios["responses_api"] = authProxyScenarioID
-	}
-
 	onboardingScenarioID, err := r.ensureManagedScenario(ctx, ensureScenarioRequest{
-		Kind:                          metadataKindOnboarding,
-		ExistingScenarioID:            state.OnboardingScenarioID,
-		SourceURL:                     r.cfg.OnboardingSourceURL,
-		RootConfig:                    onboardingRootConfig,
-		ExternalSlotProviderScenarios: onboardingProviderScenarios,
+		Kind:               metadataKindOnboarding,
+		ExistingScenarioID: state.OnboardingScenarioID,
+		SourceURL:          r.cfg.OnboardingSourceURL,
+		RootConfig:         onboardingRootConfig,
 		ExternalSlots: map[string]managerclient.ExternalSlotBindingRequest{
 			"matrix": {
 				BindableServiceID: matrixServiceID,
-			},
-			"responses_api": {
-				BindableServiceID: sharedResponsesID,
 			},
 			"provisioning_mcp": {
 				BindableServiceID: provisionerMCPServiceID,
@@ -272,9 +266,9 @@ func (r *Runner) ensureSharedResponsesService(ctx context.Context, existingScena
 	if r.cfg.AuthProxySourceURL == "" {
 		return "", "", errors.New("no shared responses bindable service is available and auth proxy bootstrap is not configured")
 	}
-	authJSON, err := os.ReadFile(r.cfg.CodexAuthJSONPath)
+	authJSON, err := readCodexAuthJSON(r.cfg.CodexAuthJSONPath)
 	if err != nil {
-		return "", "", fmt.Errorf("read codex auth json: %w", err)
+		return "", "", err
 	}
 
 	scenarioID, err := r.ensureManagedScenario(ctx, ensureScenarioRequest{
@@ -282,7 +276,7 @@ func (r *Runner) ensureSharedResponsesService(ctx context.Context, existingScena
 		ExistingScenarioID: existingScenarioID,
 		SourceURL:          r.cfg.AuthProxySourceURL,
 		RootConfig: map[string]any{
-			"auth_json": string(authJSON),
+			"auth_json": authJSON,
 		},
 		Metadata: map[string]any{
 			"kind": metadataKindAuthProxy,
@@ -603,6 +597,14 @@ func (r *Runner) bootstrapOnlySourceURLs() []string {
 		}
 	}
 	return urls
+}
+
+func readCodexAuthJSON(path string) (string, error) {
+	authJSON, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read codex auth json: %w", err)
+	}
+	return string(authJSON), nil
 }
 
 func loginClient(homeserverURL, username, password string) (*mautrix.Client, error) {

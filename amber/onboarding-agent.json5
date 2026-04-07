@@ -4,6 +4,7 @@
   config_schema: {
     type: "object",
     properties: {
+      auth_json: { type: "string", secret: true },
       matrix_username: { type: "string" },
       matrix_password: { type: "string", secret: true },
       model: { type: "string", default: "gpt-5.4-mini" },
@@ -13,20 +14,20 @@
       agents_md: { type: ["string", "null"] },
       workspace_agents_md: { type: ["string", "null"] },
     },
-    required: ["matrix_username", "matrix_password", "model"],
+    required: ["auth_json", "matrix_username", "matrix_password", "model"],
     additionalProperties: false,
   },
 
   slots: {
     matrix: { kind: "http" },
     provisioning_mcp: { kind: "mcp" },
-    responses_api: { kind: "http" },
   },
 
   components: {
     codex_agent: {
-      manifest: "https://raw.githubusercontent.com/ricelines/codex-a2a/refs/heads/main/amber/codex-a2a-runtime.json5",
+      manifest: "https://raw.githubusercontent.com/ricelines/codex-a2a/refs/heads/main/amber.json5",
       config: {
+        auth_json: "${config.auth_json}",
         model: "${config.model}",
         model_reasoning_effort: "${config.model_reasoning_effort}",
         developer_instructions: "${config.developer_instructions}",
@@ -56,7 +57,6 @@
     { to: "#matrix_ingress.matrix", from: "slots.matrix", weak: true },
     { to: "#matrix_ingress.upstream_a2a", from: "#codex_agent.a2a" },
     { to: "#matrix_tools.matrix", from: "slots.matrix", weak: true },
-    { to: "#codex_agent.responses_api", from: "slots.responses_api", weak: true },
     { to: "#codex_agent.tool", from: "#matrix_tools.mcp" },
     { to: "#codex_agent.tool", from: "slots.provisioning_mcp", weak: true },
   ],

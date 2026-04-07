@@ -167,12 +167,12 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.OnboardingBotPassword) == "" {
 		problems = append(problems, envOnboardingBotPassword+" is required")
 	}
+	if c.CodexAuthJSONPath == "" {
+		problems = append(problems, envCodexAuthJSONPath+" is required")
+	}
 	if c.SharedResponsesBindableServiceID == "" {
 		if c.AuthProxySourceURL == "" && c.SharedResponsesBindableServiceName == "" {
 			problems = append(problems, "either shared responses bindable service id/name or auth proxy source URL is required")
-		}
-		if c.AuthProxySourceURL != "" && c.CodexAuthJSONPath == "" && c.SharedResponsesBindableServiceName == "" {
-			problems = append(problems, envCodexAuthJSONPath+" is required when using auth proxy bootstrap")
 		}
 	}
 	if len(problems) > 0 {
